@@ -1,0 +1,332 @@
+note synapse-board src/00-util.om -- shared state, output buffers, escaping, input loading, JSON field access.
+note Inputs live in globals (host words may name globals); each JSONL line is copied into a caller-local
+note 64 KiB line buffer before json.om parses it, because a global is never passed to a function.
+const SBCAP ulong 4194304
+const SBOCAP ulong 8388608
+const SBSLOT ulong 4096
+const SBLINES ulong 999999
+global gin0 uchar 4194304
+global gin1 uchar 4194304
+global gin2 uchar 4194304
+global glen ulong 3
+global gmd uchar 8388608
+global ght uchar 8388608
+global gol ulong 2
+global gerr ulong 1
+global gpath uchar 40960
+global gplen ulong 10
+global gtmp uchar 4096
+global gnow uchar 64
+global gnowl ulong 1
+global gpkt uchar 4096
+text tamp "&amp;"
+text tlt "&lt;"
+text tgt "&gt;"
+text tquot "&quot;"
+text tapos "&#39;"
+text tnl "\n"
+text tme "synapse-board: "
+note ======== output: w 0 is BOARD.md, w 1 is index.html
+fn sbput w ulong c uchar to void
+n = get gol w
+if ge n SBOCAP
+put gerr 0 1
+ret
+end
+if eq w 0
+put gmd n c
+else
+put ght n c
+end
+put gol w add n 1
+end
+fn sbraw w ulong s view uchar * to void
+for i ulong len s
+sbput w get s i
+end
+end
+fn sbr2 s view uchar * to void
+sbraw 0 s
+sbraw 1 s
+end
+fn sbnum w ulong v ulong to void
+d = new uchar 20 0
+i = ulong 20
+x = v
+for it ulong 20
+i = sub i 1
+put d i uchar add rem x 10 48
+x = div x 10
+if eq x 0
+break
+end
+end
+for k ulong sub 20 i
+sbput w get d add i k
+end
+end
+fn sbn2 v ulong to void
+sbnum 0 v
+sbnum 1 v
+end
+note sbesc1: one byte, escaped for Markdown (w 0) or HTML (w 1); control bytes become a space
+fn sbesc1 w ulong c uchar to void
+if or lt c 32 eq c 127
+sbput w 32
+ret
+end
+if eq c 38
+sbraw w tamp
+ret
+end
+if eq c 60
+sbraw w tlt
+ret
+end
+if eq c 62
+sbraw w tgt
+ret
+end
+if eq w 1
+if eq c 34
+sbraw w tquot
+ret
+end
+if eq c 39
+sbraw w tapos
+ret
+end
+sbput w c
+ret
+end
+if or or eq c 124 eq c 92 or eq c 96 or eq c 91 eq c 93
+sbput w 92
+end
+sbput w c
+end
+fn sbesc w ulong s view uchar * n ulong to void
+for i ulong n
+sbesc1 w get s i
+end
+end
+fn sbe2 s view uchar * n ulong to void
+sbesc 0 s n
+sbesc 1 s n
+end
+note ======== stderr diagnostics
+fn sbsay s view uchar * to void
+r = write 2 tme 0 len tme
+r = write 2 s 0 len s
+r = write 2 tnl 0 len tnl
+end
+fn sbout s view uchar * n ulong to long
+p = ulong 0
+for it ulong 4096
+if ge p n
+ret 0
+end
+w = write 1 s p sub n p
+if le w 0
+ret -5
+end
+p = add p ulong w
+end
+ret -5
+end
+note ======== arguments: slot s of gpath holds the value of one flag
+fn sbtmpeq n ulong t view uchar * to bool
+if ne n len t
+ret false
+end
+for i ulong n
+if ne get gtmp i get t i
+ret false
+end
+end
+ret true
+end
+fn sbslotc s ulong i ulong to uchar
+ret get gpath add mul s SBSLOT i
+end
+fn sbslotl s ulong to ulong
+ret get gplen s
+end
+note sbdecv: slot s as a decimal number, or 4294967296 when not all digits (or empty or too long)
+fn sbdecv s ulong to ulong
+n = sbslotl s
+if or eq n 0 gt n 9
+ret 4294967296
+end
+v = ulong 0
+for i ulong n
+c = sbslotc s i
+if or lt c 48 gt c 57
+ret 4294967296
+end
+v = add mul v 10 ulong sub c 48
+end
+ret v
+end
+note ======== input files: w 0 claims, 1 map, 2 findings
+fn sbinb w ulong i ulong to uchar
+if eq w 0
+ret get gin0 i
+end
+if eq w 1
+ret get gin1 i
+end
+ret get gin2 i
+end
+fn sbrd w ulong fd int p ulong to long
+if eq w 0
+ret read fd gin0 p sub SBCAP p
+end
+if eq w 1
+ret read fd gin1 p sub SBCAP p
+end
+ret read fd gin2 p sub SBCAP p
+end
+note sbload: read the file named by slot s into input w; 0 ok, -65 too large, else minus errno
+fn sbload w ulong s ulong to long
+put glen w 0
+fd = fopen gpath mul s SBSLOT sbslotl s 524288 0
+if lt fd 0
+ret fd
+end
+p = ulong 0
+for it ulong 999999
+if ge p SBCAP
+c = fclose int fd
+ret -65
+end
+r = sbrd w int fd p
+if lt r 0
+if ne r -4
+c = fclose int fd
+ret r
+end
+else
+if eq r 0
+c = fclose int fd
+put glen w p
+ret 0
+end
+p = add p ulong r
+end
+end
+c = fclose int fd
+ret -65
+end
+note sbline: copy the line of input w starting at off (without its newline) into lb; byte count or -1
+fn sbline w ulong off ulong lb edit uchar 65536 to long
+tot = get glen w
+n = ulong 0
+for k ulong 65537
+p = add off n
+if ge p tot
+ret long n
+end
+c = sbinb w p
+if eq c 10
+ret long n
+end
+if ge n 65536
+ret -1
+end
+put lb n c
+n = add n 1
+end
+ret -1
+end
+note ======== JSON fields of one parsed line (root object token 0)
+fn sbkey lb view uchar 65536 tp view uint 16400 key view uchar * to ulong
+k = js_first tp 0
+for it ulong 4096
+if eq k jsnone
+ret jsnone
+end
+if js_streq lb js_off tp k key
+ret add k 1
+end
+k = js_mnext tp k
+end
+ret jsnone
+end
+note sbgets: decoded string value of key into sb; byte count, or -1 when absent or not a string
+fn sbgets lb view uchar 65536 tp view uint 16400 sb edit uchar 65536 key view uchar * to long
+v = sbkey lb tp key
+if eq v jsnone
+ret -1
+end
+if ne js_type tp v jsstr
+ret -1
+end
+ret js_sget lb js_off tp v sb
+end
+fn sbgetu lb view uchar 65536 tp view uint 16400 key view uchar * to ulong
+v = sbkey lb tp key
+if eq v jsnone
+ret 0
+end
+if ne js_type tp v jsnum
+ret 0
+end
+ret js_tou lb js_off tp v
+end
+fn sbgetb lb view uchar 65536 tp view uint 16400 key view uchar * to bool
+v = sbkey lb tp key
+if eq v jsnone
+ret false
+end
+ret eq js_type tp v jstrue
+end
+note sbfld: append the escaped string value of key to output w (nothing when absent)
+fn sbfld w ulong lb view uchar 65536 tp view uint 16400 sb edit uchar 65536 key view uchar * to void
+n = sbgets lb tp sb key
+if gt n 0
+sbesc w sb ulong n
+end
+end
+note sbiso: Unix seconds as YYYY-MM-DDTHH:MM:SSZ into b[0..20) (days-to-civil, proleptic Gregorian)
+fn sbiso b edit uchar 64 secs ulong to ulong
+days = div secs 86400
+sod = rem secs 86400
+z = add days 719468
+era = div z 146097
+doe = sub z mul era 146097
+yoe = div sub add sub doe div doe 1460 div doe 36524 div doe 146096 365
+y = add yoe mul era 400
+doy = sub doe sub add mul 365 yoe div yoe 4 div yoe 100
+mp = div add mul 5 doy 2 153
+d = add sub doy div add mul 153 mp 2 5 1
+m = add mp 3
+if ge mp 10
+m = sub mp 9
+end
+if le m 2
+y = add y 1
+end
+sbput4 b 0 y
+put b 4 45
+sbput2 b 5 m
+put b 7 45
+sbput2 b 8 d
+put b 10 84
+sbput2 b 11 div sod 3600
+put b 13 58
+sbput2 b 14 rem div sod 60 60
+put b 16 58
+sbput2 b 17 rem sod 60
+put b 19 90
+ret 20
+end
+fn sbput2 b edit uchar 64 p ulong v ulong to void
+put b p uchar add div rem v 100 10 48
+put b add p 1 uchar add rem v 10 48
+end
+fn sbput4 b edit uchar 64 p ulong v ulong to void
+put b p uchar add rem div v 1000 10 48
+put b add p 1 uchar add rem div v 100 10 48
+put b add p 2 uchar add rem div v 10 10 48
+put b add p 3 uchar add rem v 10 48
+end

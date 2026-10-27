@@ -1,0 +1,493 @@
+note synapse-board src/10-scan.om -- validate the three JSONL inputs and index what render needs.
+note gcnt: 0 active 1 lapsed 2 inactive 3 repos-with-claims 4 conflicts 5 error 6 warn 7 info
+note 8 map repos 9 inferred parents 10 findings (not conflicts) 11 claims seen
+const SBMAXC ulong 65536
+const SBMAXM ulong 4096
+global gcnt ulong 16
+global gpool uchar 8388608
+global gpl ulong 1
+global gcoff ulong 65536
+global gtoff ulong 65536
+global gtln ulong 65536
+global gkoff ulong 65536
+global gkln ulong 65536
+global gkrk ulong 65536
+global glap ulong 65536
+global gord ulong 65536
+global gnc ulong 1
+global gmoff ulong 4096
+global gmno ulong 4096
+global gmnl ulong 4096
+global gmpo ulong 4096
+global gmpl ulong 4096
+global gmst ulong 4096
+global gmpar ulong 4096
+global gmvis ulong 4096
+global gnm ulong 1
+global gstk ulong 4096
+global gsdp ulong 4096
+text tfc "claims"
+text tfm "map"
+text tff "findings"
+text kid "id"
+text kagent "agent"
+text ksess "session"
+text ktgt "target"
+text kmode "mode"
+text kstate "state"
+text kint "intent"
+text kexp "expires"
+text kact "active"
+text kev "evidence"
+text kkind "kind"
+text ksev "severity"
+text krepo "repo"
+text kpr "pr"
+text kpath "path"
+text kdet "detail"
+text koid "other_id"
+text koag "other_agent"
+text kpar "parent"
+text kpst "parent_status"
+text kpurp "purpose"
+text karch "archived"
+text kfork "fork"
+text krule "infer_rule"
+text vconf "conflict"
+text verr "error"
+text vwarn "warn"
+text vinfo "info"
+text vext "ext"
+text vcnf "CONFIRMED"
+text vinf "INFERRED"
+text vroot "ROOT"
+text vnone "NONE"
+text emjs "malformed JSON object line"
+text emlong "line longer than 65536 bytes"
+text emid "claim needs string id and target"
+text emrepo "map record needs string repo"
+text emkind "finding needs string kind"
+text emmany "too many records"
+text empool "string pool full"
+note sberr: "synapse-board: FILE:LINE: msg" on stderr; returns 65
+fn sberr w ulong ln ulong msg view uchar * to long
+d = new uchar 24 0
+i = ulong 24
+x = ln
+for it ulong 20
+i = sub i 1
+put d i uchar add rem x 10 48
+x = div x 10
+if eq x 0
+break
+end
+end
+r = write 2 tme 0 len tme
+if eq w 0
+r = write 2 tfc 0 len tfc
+end
+if eq w 1
+r = write 2 tfm 0 len tfm
+end
+if eq w 2
+r = write 2 tff 0 len tff
+end
+put d sub i 1 58
+r = write 2 d sub i 1 add sub 24 i 1
+put d 0 58
+put d 1 32
+r = write 2 d 0 2
+r = write 2 msg 0 len msg
+r = write 2 tnl 0 len tnl
+ret 65
+end
+note sbpl: parse the line of input w at off into lb/tp; its length (0 = empty line), -1 too long, -2 malformed
+fn sbpl w ulong off ulong lb edit uchar 65536 tp edit uint 16400 to long
+n = sbline w off lb
+if lt n 0
+ret -1
+end
+if eq n 0
+ret 0
+end
+r = js_init tp 65536 64
+r = js_parse lb tp ulong n
+if lt r 0
+ret -2
+end
+if ne js_type tp 0 jsobj
+ret -2
+end
+ret n
+end
+note sbpool: append sb[0..n) to the pool; its offset, or SBOCAP when the pool is full
+fn sbpool sb view uchar 65536 n ulong to ulong
+p = get gpl 0
+if gt add p n SBOCAP
+ret SBOCAP
+end
+for i ulong n
+put gpool add p i get sb i
+end
+put gpl 0 add p n
+ret p
+end
+fn sbeqv sb view uchar 65536 n long t view uchar * to bool
+if lt n 0
+ret false
+end
+if ne ulong n len t
+ret false
+end
+for i ulong len t
+if ne get sb i get t i
+ret false
+end
+end
+ret true
+end
+fn sbinc i ulong to void
+put gcnt i add get gcnt i 1
+end
+note sbtsless: whether string sb[0..n) sorts before the now timestamp (byte order)
+fn sbtsless sb view uchar 65536 n ulong to bool
+m = get gnowl 0
+for i ulong 64
+if or ge i n ge i m
+ret lt n m
+end
+a = get sb i
+b = get gnow i
+if ne a b
+ret lt a b
+end
+end
+ret false
+end
+note ======== findings: counts by kind conflict / severity
+fn sbscanf to long
+lb = new uchar 65536 0
+tp = new uint 16400 0
+sb = new uchar 65536 0
+tot = get glen 2
+off = ulong 0
+ln = ulong 0
+for it ulong SBLINES
+if ge off tot
+ret 0
+end
+ln = add ln 1
+n = sbpl 2 off lb tp
+if eq n -1
+ret sberr 2 ln emlong
+end
+if eq n -2
+ret sberr 2 ln emjs
+end
+if gt n 0
+k = sbgets lb tp sb kkind
+if lt k 0
+ret sberr 2 ln emkind
+end
+if sbeqv sb k vconf
+sbinc 4
+else
+sbinc 10
+k = sbgets lb tp sb ksev
+if sbeqv sb k verr
+sbinc 5
+end
+if sbeqv sb k vwarn
+sbinc 6
+end
+if sbeqv sb k vinfo
+sbinc 7
+end
+end
+end
+off = add add off ulong n 1
+end
+ret sberr 2 ln emmany
+end
+note sbrkey: repo grouping key of target sb[0..n) stored at pool offset p: sets gkoff/gkln/gkrk of claim c
+note rank 0 a repo (repo:R, branch:R#x, path:R:x, pr:R#n), 1 ext:, 2 unparsed
+fn sbrkey sb view uchar 65536 n ulong p ulong c ulong to void
+put gkrk c 2
+put gkoff c p
+put gkln c 0
+q = n
+for i ulong n
+if eq get sb i 58
+q = i
+break
+end
+end
+if ge q n
+ret
+end
+if and eq q 3 and eq get sb 0 101 and eq get sb 1 120 eq get sb 2 116
+put gkrk c 1
+ret
+end
+e = n
+for j ulong sub n add q 1
+k = add add q 1 j
+c2 = get sb k
+if or eq c2 35 eq c2 58
+e = k
+break
+end
+end
+if le e add q 1
+ret
+end
+put gkrk c 0
+put gkoff c add add p q 1
+put gkln c sub e add q 1
+end
+note ======== claims: active claims indexed; inactive counted
+fn sbscanc to long
+lb = new uchar 65536 0
+tp = new uint 16400 0
+sb = new uchar 65536 0
+tot = get glen 0
+off = ulong 0
+ln = ulong 0
+for it ulong SBLINES
+if ge off tot
+ret 0
+end
+ln = add ln 1
+n = sbpl 0 off lb tp
+if eq n -1
+ret sberr 0 ln emlong
+end
+if eq n -2
+ret sberr 0 ln emjs
+end
+if gt n 0
+k = sbgets lb tp sb kid
+t = sbgets lb tp sb ktgt
+if or le k 0 le t 0
+ret sberr 0 ln emid
+end
+sbinc 11
+if sbgetb lb tp kact
+c = get gnc 0
+if ge c SBMAXC
+ret sberr 0 ln emmany
+end
+p = sbpool sb ulong t
+if eq p SBOCAP
+ret sberr 0 ln empool
+end
+put gcoff c off
+put gtoff c p
+put gtln c ulong t
+sbrkey sb ulong t p c
+put glap c 0
+sbinc 0
+e = sbgets lb tp sb kexp
+if gt e 0
+if sbtsless sb ulong e
+put glap c 1
+sbinc 1
+end
+end
+put gord c c
+put gnc 0 add c 1
+else
+sbinc 2
+end
+end
+off = add add off ulong n 1
+end
+ret sberr 0 ln emmany
+end
+note sbkcmp: claim a sorts before claim b (rank, repo key bytes, file order)
+fn sbkcmp a ulong b ulong to bool
+ra = get gkrk a
+rb = get gkrk b
+if ne ra rb
+ret lt ra rb
+end
+la = get gkln a
+lb = get gkln b
+oa = get gkoff a
+ob = get gkoff b
+for i ulong 4096
+if or ge i la ge i lb
+if ne la lb
+ret lt la lb
+end
+ret lt a b
+end
+ca = get gpool add oa i
+cb = get gpool add ob i
+if ne ca cb
+ret lt ca cb
+end
+end
+ret lt a b
+end
+fn sbkeyeq a ulong b ulong to bool
+if ne get gkrk a get gkrk b
+ret false
+end
+la = get gkln a
+if ne la get gkln b
+ret false
+end
+oa = get gkoff a
+ob = get gkoff b
+for i ulong la
+if ne get gpool add oa i get gpool add ob i
+ret false
+end
+end
+ret true
+end
+note sbsortc: insertion sort of gord, then count distinct rank-0 repos
+fn sbsortc to void
+n = get gnc 0
+for i ulong n
+x = get gord i
+j = i
+while gt j 0 bound 65536
+y = get gord sub j 1
+if sbkcmp y x
+break
+end
+put gord j y
+j = sub j 1
+end
+put gord j x
+end
+for i2 ulong n
+c = get gord i2
+if eq get gkrk c 0
+if eq i2 0
+sbinc 3
+else
+if not sbkeyeq get gord sub i2 1 c
+sbinc 3
+end
+end
+end
+end
+end
+note sbpeq: pool strings equal ignoring ASCII case
+fn sbpeq ao ulong al ulong bo ulong bl ulong to bool
+if ne al bl
+ret false
+end
+for i ulong al
+a = get gpool add ao i
+b = get gpool add bo i
+if and ge a 65 le a 90
+a = add a 32
+end
+if and ge b 65 le b 90
+b = add b 32
+end
+if ne a b
+ret false
+end
+end
+ret true
+end
+note ======== map: records indexed, parents resolved within the map
+fn sbscanm to long
+lb = new uchar 65536 0
+tp = new uint 16400 0
+sb = new uchar 65536 0
+tot = get glen 1
+off = ulong 0
+ln = ulong 0
+for it ulong SBLINES
+if ge off tot
+ret sbresm
+end
+ln = add ln 1
+n = sbpl 1 off lb tp
+if eq n -1
+ret sberr 1 ln emlong
+end
+if eq n -2
+ret sberr 1 ln emjs
+end
+if gt n 0
+k = sbgets lb tp sb krepo
+if le k 0
+ret sberr 1 ln emrepo
+end
+m = get gnm 0
+if ge m SBMAXM
+ret sberr 1 ln emmany
+end
+p = sbpool sb ulong k
+if eq p SBOCAP
+ret sberr 1 ln empool
+end
+put gmoff m off
+put gmno m p
+put gmnl m ulong k
+put gmpl m 0
+put gmpar m jsnone
+put gmvis m 0
+k = sbgets lb tp sb kpar
+if gt k 0
+q = ulong k
+for i ulong ulong k
+if eq get sb i 64
+q = i
+break
+end
+end
+p = sbpool sb q
+if eq p SBOCAP
+ret sberr 1 ln empool
+end
+put gmpo m p
+put gmpl m q
+end
+k = sbgets lb tp sb kpst
+st = ulong 4
+if sbeqv sb k vcnf
+st = 0
+end
+if sbeqv sb k vinf
+st = 1
+sbinc 9
+end
+if sbeqv sb k vroot
+st = 2
+end
+if sbeqv sb k vnone
+st = 3
+end
+put gmst m st
+sbinc 8
+put gnm 0 add m 1
+end
+off = add add off ulong n 1
+end
+ret sberr 1 ln emmany
+end
+fn sbresm to long
+n = get gnm 0
+for i ulong n
+pl = get gmpl i
+if gt pl 0
+for j ulong n
+if ne i j
+if sbpeq get gmpo i pl get gmno j get gmnl j
+put gmpar i j
+break
+end
+end
+end
+end
+end
+ret 0
+end

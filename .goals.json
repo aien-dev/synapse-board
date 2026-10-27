@@ -1,0 +1,10 @@
+{
+  "repo": "aien-dev/synapse-board",
+  "parent": "aien-dev/synapse@099a980fedab8a6797bbf0358b8c5502c8045142",
+  "goals": [
+    {"id": "render", "status": "IMPLEMENTED", "acceptance": "tests/run.sh: fixture render byte-equal to tests/golden, stdout JSON, LAPSED/INFERRED/cycle marks, deterministic re-render"},
+    {"id": "escape", "status": "IMPLEMENTED", "acceptance": "tests/run.sh: <script> intent escaped in BOARD.md and index.html; javascript: and quoted URLs never linked; no script/iframe/img/link/src in HTML"},
+    {"id": "serve-tailnet-only", "status": "IMPLEMENTED", "acceptance": "tests/run.sh: serve refuses 0.0.0.0, 127.0.0.1, 100.128.0.1, 100.63.255.255 with exit 64; live GET / on the host's 100.64.0.0/10 address returns index.html"},
+    {"id": "deploy", "status": "PROPOSED", "acceptance": "integrator wires render after each claims/pulse run and one serve unit on the tailnet address; not done by this repo"}
+  ]
+}

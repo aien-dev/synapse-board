@@ -1,0 +1,383 @@
+note synapse-board src/90-main.om -- arguments, render (atomic writes of BOARD.md and index.html), main.
+note exit codes (COORD-CONTRACT): 0 ok, 4 input missing, 64 usage, 65 malformed input, 70 internal, 75 temporary
+text tbmd "BOARD.md"
+text tidx "index.html"
+text crender "render"
+text cserve "serve"
+text fclaims "--claims"
+text fmap "--map"
+text ffind "--findings"
+text fout "--out"
+text fnow "--now"
+text fhead "--head"
+text fdir "--dir"
+text fbind "--bind"
+text fmax "--max"
+text emusage "usage: synapse-board render --claims FILE --map FILE [--findings FILE] --out DIR [--now TS] [--head HEX] | serve --dir DIR --bind IP:PORT [--max N]"
+text emnoc "claims file not found"
+text emnom "map file not found"
+text embig "input file larger than 4 MiB"
+text emread "input read failed"
+text emnow "--now must be [0-9TZ:.-], at most 40 bytes"
+text emhex "--head must be hex, at most 64 digits"
+text emout "--out must be at most 1900 bytes"
+text emovf "output larger than 8 MiB"
+text emwr "writing the output failed"
+text jr1 "{\"ok\":true,\"files\":2,\"active\":"
+text jr2 ",\"conflicts\":"
+text jr3 ",\"findings\":"
+text jr4 ",\"repos\":"
+text jr5 ",\"head\":\""
+text jr6 "\"}\n"
+note sbflag: the slot named by the flag in gtmp[0..n), or 99 when unknown
+fn sbflag n ulong to ulong
+if sbtmpeq n fclaims
+ret 0
+end
+if sbtmpeq n fmap
+ret 1
+end
+if sbtmpeq n ffind
+ret 2
+end
+if sbtmpeq n fout
+ret 3
+end
+if sbtmpeq n fnow
+ret 4
+end
+if sbtmpeq n fhead
+ret 5
+end
+if sbtmpeq n fdir
+ret 6
+end
+if sbtmpeq n fbind
+ret 7
+end
+if sbtmpeq n fmax
+ret 8
+end
+ret 99
+end
+note sbargs: argv[2..] as --flag value pairs into gpath slots; 0 or 64
+fn sbargs to long
+na = argcnt
+i = long 2
+for it ulong 64
+if ge i na
+ret 0
+end
+if ge add i 1 na
+ret 64
+end
+n = argread int i gtmp 0 4096
+if lt n 0
+ret 64
+end
+s = sbflag ulong n
+if eq s 99
+ret 64
+end
+if gt get gplen s 0
+ret 64
+end
+m = argread int add i 1 gpath mul s SBSLOT 4095
+if le m 0
+ret 64
+end
+put gplen s ulong m
+i = add i 2
+end
+ret 64
+end
+fn sbcheck s ulong mx ulong hex bool to bool
+n = sbslotl s
+if gt n mx
+ret false
+end
+for i ulong n
+c = sbslotc s i
+ok = and ge c 48 le c 57
+if hex
+ok = or ok and ge c 97 le c 102
+else
+ok = or ok or or eq c 84 eq c 90 or or eq c 58 eq c 46 eq c 45
+end
+if not ok
+ret false
+end
+end
+ret true
+end
+note sbsetnow: gnow from --now, else the realtime clock
+fn sbsetnow to void
+n = sbslotl 4
+if gt n 0
+for i ulong n
+put gnow i sbslotc 4 i
+end
+put gnowl 0 n
+ret
+end
+b = new uchar 64 0
+t = realns
+m = sbiso b div ulong t 1000000000
+for j ulong m
+put gnow j get b j
+end
+put gnowl 0 m
+end
+note sbpk: gpkt packed rename list (tmp, final) for output w; returns its length
+fn sbpk w ulong to ulong
+d = sbslotl 3
+nm = len tbmd
+if eq w 1
+nm = len tidx
+end
+tl = add add d 6 nm
+put gpkt 0 2
+put gpkt 1 0
+put gpkt 2 uchar and tl 255
+put gpkt 3 uchar shr tl 8
+p = ulong 4
+for i ulong d
+put gpkt add p i sbslotc 3 i
+end
+p = add p d
+put gpkt p 47
+put gpkt add p 1 46
+p = add p 2
+for j ulong nm
+if eq w 0
+put gpkt add p j get tbmd j
+else
+put gpkt add p j get tidx j
+end
+end
+p = add p nm
+put gpkt p 46
+put gpkt add p 1 116
+put gpkt add p 2 109
+put gpkt add p 3 112
+p = add p 4
+fl = add add d 1 nm
+put gpkt p uchar and fl 255
+put gpkt add p 1 uchar shr fl 8
+p = add p 2
+for k ulong d
+put gpkt add p k sbslotc 3 k
+end
+p = add p d
+put gpkt p 47
+p = add p 1
+for k2 ulong nm
+if eq w 0
+put gpkt add p k2 get tbmd k2
+else
+put gpkt add p k2 get tidx k2
+end
+end
+ret add p nm
+end
+fn sbwr w ulong fd int p ulong n ulong to long
+if eq w 0
+ret write fd gmd p sub n p
+end
+ret write fd ght p sub n p
+end
+note sbwfile: write output w to DIR/.NAME.tmp, fsync, rename over DIR/NAME; 0 or negative
+fn sbwfile w ulong to long
+pk = sbpk w
+tl = or ulong get gpkt 2 shl ulong get gpkt 3 8
+fd = fopen gpkt 4 tl 524865 420
+if lt fd 0
+ret fd
+end
+n = get gol w
+p = ulong 0
+for it ulong 999999
+if ge p n
+break
+end
+r = sbwr w int fd p n
+if lt r 0
+if ne r -4
+c = fclose int fd
+ret r
+end
+else
+p = add p ulong r
+end
+end
+r = fsync int fd
+c = fclose int fd
+if lt r 0
+ret r
+end
+if lt c 0
+ret c
+end
+ret renames gpkt 0 pk 0
+end
+fn sbinerr r long miss view uchar * to long
+if eq r -2
+sbsay miss
+ret 4
+end
+if eq r -65
+sbsay embig
+ret 65
+end
+sbsay emread
+ret 70
+end
+fn sbrender to long
+if or or eq sbslotl 0 0 eq sbslotl 1 0 eq sbslotl 3 0
+sbsay emusage
+ret 64
+end
+if or or gt sbslotl 6 0 gt sbslotl 7 0 gt sbslotl 8 0
+sbsay emusage
+ret 64
+end
+if gt sbslotl 3 1900
+sbsay emout
+ret 64
+end
+if not sbcheck 4 40 false
+sbsay emnow
+ret 64
+end
+if not sbcheck 5 64 true
+sbsay emhex
+ret 64
+end
+r = sbload 0 0
+if lt r 0
+ret sbinerr r emnoc
+end
+r = sbload 1 1
+if lt r 0
+ret sbinerr r emnom
+end
+if gt sbslotl 2 0
+r = sbload 2 2
+if and lt r 0 ne r -2
+ret sbinerr r emread
+end
+end
+sbsetnow
+r = sbscanf
+if ne r 0
+ret r
+end
+r = sbscanc
+if ne r 0
+ret r
+end
+sbsortc
+r = sbscanm
+if ne r 0
+ret r
+end
+sbemit
+if ne get gerr 0 0
+sbsay emovf
+ret 70
+end
+r = makedir gpath mul 3 SBSLOT sbslotl 3 493
+r = sbwfile 0
+if eq r 0
+r = sbwfile 1
+end
+if lt r 0
+sbsay emwr
+ret 75
+end
+sbrjson
+ret 0
+end
+fn sbrjson to void
+o = new uchar 512 0
+p = ulong 0
+p = sbapp o p jr1
+p = sbappn o p get gcnt 0
+p = sbapp o p jr2
+p = sbappn o p get gcnt 4
+p = sbapp o p jr3
+p = sbappn o p get gcnt 10
+p = sbapp o p jr4
+p = sbappn o p get gcnt 8
+p = sbapp o p jr5
+n = sbslotl 5
+if eq n 0
+p = sbapp o p tunk
+else
+for i ulong n
+put o add p i sbslotc 5 i
+end
+p = add p n
+end
+p = sbapp o p jr6
+r = sbout o p
+end
+fn sbapp o edit uchar 512 p ulong t view uchar * to ulong
+for i ulong len t
+put o add p i get t i
+end
+ret add p len t
+end
+fn sbappn o edit uchar 512 p ulong v ulong to ulong
+d = new uchar 20 0
+i = ulong 20
+x = v
+for it ulong 20
+i = sub i 1
+put d i uchar add rem x 10 48
+x = div x 10
+if eq x 0
+break
+end
+end
+for k ulong sub 20 i
+put o add p k get d add i k
+end
+ret add p sub 20 i
+end
+fn sbcmd to ulong
+if lt argcnt 2
+ret 0
+end
+n = argread 1 gtmp 0 4096
+if lt n 0
+ret 0
+end
+if sbtmpeq ulong n crender
+ret 1
+end
+if sbtmpeq ulong n cserve
+ret 2
+end
+ret 0
+end
+fn main to int
+cmd = sbcmd
+if eq cmd 0
+sbsay emusage
+ret 64
+end
+r = sbargs
+if ne r 0
+sbsay emusage
+ret 64
+end
+if eq cmd 1
+ret int sbrender
+end
+if or or gt sbslotl 0 0 gt sbslotl 1 0 or or gt sbslotl 2 0 gt sbslotl 3 0 or gt sbslotl 4 0 gt sbslotl 5 0
+sbsay emusage
+ret 64
+end
+ret int sbserve
+end

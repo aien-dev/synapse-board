@@ -1,0 +1,260 @@
+note synapse-board src/30-serve.om -- read-only GET server over seed/net/http.om, tailnet (100.64.0.0/10) only.
+text tget "GET"
+text thead "HEAD"
+text pslash "/"
+text pindex "/index.html"
+text pboard "/BOARD.md"
+text hct "Content-Type"
+text vhtml "text/html; charset=utf-8"
+text vmd "text/markdown; charset=utf-8"
+text hcc "Cache-Control"
+text vnost "no-store"
+text hxct "X-Content-Type-Options"
+text vnosn "nosniff"
+text hcsp "Content-Security-Policy"
+text vcsp "default-src 'none'; style-src 'unsafe-inline'"
+text hallow "Allow"
+text vallow "GET, HEAD"
+text emaddr "serve needs --bind A.B.C.D:PORT with A.B.C.D inside 100.64.0.0/10 (tailnet); refusing"
+text emlisten "listen failed"
+text emdir "serve needs --dir DIR (at most 1900 bytes)"
+text jserv1 "{\"ok\":true,\"serving\":\""
+text jserv2 "\"}\n"
+note sbip: parse slot 7 as A.B.C.D:PORT; returns ip << 16 | port, or 1 << 48 when malformed
+fn sbip to ulong
+bad = shl ulong 1 48
+n = sbslotl 7
+ip = ulong 0
+oc = ulong 0
+dg = ulong 0
+np = ulong 0
+port = ulong 0
+inp = false
+for i ulong n
+c = sbslotc 7 i
+if and ge c 48 le c 57
+if ge dg 5
+ret bad
+end
+if inp
+port = add mul port 10 ulong sub c 48
+else
+oc = add mul oc 10 ulong sub c 48
+end
+dg = add dg 1
+else
+if eq dg 0
+ret bad
+end
+if and eq c 46 not inp
+if or gt oc 255 ge np 3
+ret bad
+end
+ip = or shl ip 8 oc
+np = add np 1
+oc = 0
+dg = 0
+else
+if and eq c 58 not inp
+if or gt oc 255 ne np 3
+ret bad
+end
+ip = or shl ip 8 oc
+inp = true
+dg = 0
+else
+ret bad
+end
+end
+end
+end
+if or not inp eq dg 0
+ret bad
+end
+if or gt port 65535 eq port 0
+ret bad
+end
+ret or shl ip 16 port
+end
+note sbtail: the address is inside 100.64.0.0/10
+fn sbtail ip ulong to bool
+ret and eq shr ip 24 100 eq and shr ip 22 3 1
+end
+note sbfile: read DIR/name (w 0 BOARD.md, 1 index.html) into fb; byte count or negative
+fn sbfile w ulong fb edit uchar 4194304 to long
+n = sbfpath w
+fd = fopen gtmp 0 n 524288 0
+if lt fd 0
+ret fd
+end
+p = ulong 0
+for it ulong 999999
+if ge p 4194304
+c = fclose int fd
+ret -27
+end
+r = read int fd fb p sub 4194304 p
+if lt r 0
+if ne r -4
+c = fclose int fd
+ret r
+end
+else
+if eq r 0
+c = fclose int fd
+ret long p
+end
+p = add p ulong r
+end
+end
+c = fclose int fd
+ret -27
+end
+note sbfpath: gtmp = DIR "/" name; its length
+fn sbfpath w ulong to ulong
+n = sbslotl 6
+for i ulong n
+put gtmp i sbslotc 6 i
+end
+put gtmp n 47
+n = add n 1
+if eq w 0
+for j ulong len tbmd
+put gtmp add n j get tbmd j
+end
+ret add n len tbmd
+end
+for k ulong len tidx
+put gtmp add n k get tidx k
+end
+ret add n len tidx
+end
+fn sbhdr cs edit ulong 320 io edit uchar 131072 nm view uchar * v view uchar * to long
+r = hhname cs io nm
+ret hfe r hhval cs io v
+end
+note sbanswer: one request already read into cs/io
+fn sbanswer cs edit ulong 320 io edit uchar 131072 fb edit uchar 4194304 to long
+g = hismeth cs io tget
+hd = hismeth cs io thead
+if not or g hd
+r = hrspst cs io 405
+r = hfe r sbhdr cs io hallow vallow
+r = hfe r hhend cs io 0 0
+ret hfe r hwfin cs io
+end
+w = ulong 2
+if or hispath cs io pslash hispath cs io pindex
+w = 1
+end
+if hispath cs io pboard
+w = 0
+end
+if eq w 2
+ret hrspempty cs io 404
+end
+n = sbfile w fb
+if lt n 0
+ret hrspempty cs io 503
+end
+r = hrspst cs io 200
+if eq w 1
+r = hfe r sbhdr cs io hct vhtml
+else
+r = hfe r sbhdr cs io hct vmd
+end
+r = hfe r sbhdr cs io hcc vnost
+r = hfe r sbhdr cs io hxct vnosn
+r = hfe r sbhdr cs io hcsp vcsp
+r = hfe r hhend cs io 0 ulong n
+r = hfe r hput cs io part fb 0 ulong n
+ret hfe r hwfin cs io
+end
+fn sbconn lf int cs edit ulong 320 io edit uchar 131072 fb edit uchar 4194304 to void
+c = haccept lf -1
+if lt c 0
+ret
+end
+r = hinit cs io int c 1
+if lt r 0
+r = fclose int c
+ret
+end
+hsettmo cs 10000000000 10000000000
+hsetbdl cs 20000000000
+for k ulong 100
+r = hreqrd cs io
+if le r 0
+if lt r 0
+r = hreject cs io r
+end
+break
+end
+r = sbanswer cs io fb
+if lt r 0
+break
+end
+if eq hnext cs io 0
+break
+end
+end
+r = hclose cs io
+end
+fn sbsvok to void
+o = new uchar 128 0
+p = ulong 0
+for i ulong len jserv1
+put o p get jserv1 i
+p = add p 1
+end
+for j ulong sbslotl 7
+put o p sbslotc 7 j
+p = add p 1
+end
+for k ulong len jserv2
+put o p get jserv2 k
+p = add p 1
+end
+r = sbout o p
+end
+fn sbserve to long
+fb = new uchar 4194304 0
+cs = new ulong 320 0
+io = new uchar 131072 0
+a = new uchar 16 0
+d = sbslotl 6
+if or eq d 0 gt d 1900
+sbsay emdir
+ret 64
+end
+v = sbip
+if ne shr v 48 0
+sbsay emaddr
+ret 64
+end
+ip = shr v 16
+if not sbtail ip
+sbsay emaddr
+ret 64
+end
+mx = ulong 999999
+if gt sbslotl 8 0
+mx = sbdecv 8
+if or eq mx 0 gt mx 999999
+sbsay emusage
+ret 64
+end
+end
+r = haddr4 a uint ip and v 65535
+lf = hlisten a 16
+if lt lf 0
+sbsay emlisten
+ret 75
+end
+sbsvok
+for it ulong mx
+sbconn int lf cs io fb
+end
+r = fclose int lf
+ret 0
+end

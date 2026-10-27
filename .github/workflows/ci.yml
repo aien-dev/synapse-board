@@ -1,0 +1,36 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pins
+        id: pins
+        run: echo "omega=$(sed -n 's|^aien-dev/omega-mv@||p' omega.pin)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: aien-dev/omega-mv
+          ref: ${{ steps.pins.outputs.omega }}
+          path: omega-mv
+      - name: Check omc pin
+        run: echo "$(sed -n 's|^omc-sha256 ||p' omega.pin)  omega-mv/seed/out/omc" | sha256sum -c
+      - name: Tests (build synapse-board, render goldens, escaping, serve refusals)
+        env:
+          OMEGA_SRC: ${{ github.workspace }}/omega-mv
+          TEST_ROOT: ${{ runner.temp }}/board-tests
+        run: sh tests/run.sh
+      - name: Rendered board and omc diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-render
+          path: |
+            ${{ runner.temp }}/board-tests/r1
+            ${{ runner.temp }}/board-tests/bin/synapse-board.err
+          if-no-files-found: ignore
