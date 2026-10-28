@@ -1,12 +1,24 @@
 {
-  "schema_version": "1.0.0",
-  "name": "synapse-board",
-  "purpose": "Generated, read-only human view of the agent coordination state: renders BOARD.md and index.html from synapse-claims, synapse-map and synapse-pulse output and serves them on the tailnet only.",
-  "layer": "coordination",
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-28T21:31:25Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:bfe0707eccdff4f84cbd862b78ca545ccb8064f5d45a5ba05baa801746b8ca85",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 20,
+      "generated_at_commit": "2428c3cc1b77cc10c8d08c42f110afeb9578a8f6",
+      "source_tree": "sha256:5ea7afe1063652c94bf74a5b5b56445cc0d913b8c4f677a13556637a7f7a775c"
+    },
     "map": {
       "parent": "aien-dev/synapse@099a980fedab8a6797bbf0358b8c5502c8045142",
       "parent_status": "CONFIRMED"
     }
-  }
+  },
+  "layer": "coordination",
+  "name": "synapse-board",
+  "purpose": "Generated, read-only human view of the agent coordination state: renders BOARD.md and index.html from synapse-claims, synapse-map and synapse-pulse output and serves them on the tailnet only.",
+  "schema_version": "1.0.0"
 }
