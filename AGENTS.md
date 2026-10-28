@@ -1,5 +1,8 @@
 # AGENTS.md: synapse-board
 
+Development follows [Human-Directed Agentic Engineering (HDAE)](README.md#human-directed-agentic-engineering).
+The README defines the human and agent responsibilities and cites Gregory M. Kurtzer's report.
+
 The board is generated output. `BOARD.md` and `index.html` are rendered from the claims ledger, the
 repo map and pulse findings, and each render overwrites them.
 

@@ -5,6 +5,9 @@ const SBCAP ulong 4194304
 const SBOCAP ulong 8388608
 const SBSLOT ulong 4096
 const SBLINES ulong 999999
+text tbmd "BOARD.md"
+text tidx "index.html"
+text emusage "usage: synapse-board render --claims FILE --map FILE [--findings FILE] --out DIR [--now TS] [--head HEX] | serve --dir DIR --bind IP:PORT [--max N]"
 global gin0 uchar 4194304
 global gin1 uchar 4194304
 global gin2 uchar 4194304
@@ -287,18 +290,22 @@ if gt n 0
 sbesc w sb ulong n
 end
 end
-note sbiso: Unix seconds as YYYY-MM-DDTHH:MM:SSZ into b[0..20) (days-to-civil, proleptic Gregorian)
-fn sbiso b edit uchar 64 secs ulong to ulong
-days = div secs 86400
-sod = rem secs 86400
+note Keep the civil-date intermediates within the pinned compiler's register pool.
+fn sbyear doe ulong to ulong
+v = sub doe div doe 1460
+v = add v div doe 36524
+v = sub v div doe 146096
+ret div v 365
+end
+fn sbdate b edit uchar 64 days ulong to void
 z = add days 719468
 era = div z 146097
-doe = sub z mul era 146097
-yoe = div sub add sub doe div doe 1460 div doe 36524 div doe 146096 365
+z = sub z mul era 146097
+yoe = sbyear z
 y = add yoe mul era 400
-doy = sub doe sub add mul 365 yoe div yoe 4 div yoe 100
-mp = div add mul 5 doy 2 153
-d = add sub doy div add mul 153 mp 2 5 1
+z = sub z sub add mul 365 yoe div yoe 4 div yoe 100
+mp = div add mul 5 z 2 153
+d = add sub z div add mul 153 mp 2 5 1
 m = add mp 3
 if ge mp 10
 m = sub mp 9
@@ -311,6 +318,11 @@ put b 4 45
 sbput2 b 5 m
 put b 7 45
 sbput2 b 8 d
+end
+note sbiso: Unix seconds as YYYY-MM-DDTHH:MM:SSZ into b[0..20) (days-to-civil, proleptic Gregorian)
+fn sbiso b edit uchar 64 secs ulong to ulong
+sbdate b div secs 86400
+sod = rem secs 86400
 put b 10 84
 sbput2 b 11 div sod 3600
 put b 13 58
