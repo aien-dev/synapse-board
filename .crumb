@@ -3,14 +3,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-28T21:31:25Z",
+      "compiled_at": "2026-10-28T22:32:34Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:bfe0707eccdff4f84cbd862b78ca545ccb8064f5d45a5ba05baa801746b8ca85",
+      "digest": "sha256:2b0f7efe2cf56c89064ad8103d52f00fbe81442aff8dc8c68611b965d92fb14a",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 20,
-      "generated_at_commit": "2428c3cc1b77cc10c8d08c42f110afeb9578a8f6",
-      "source_tree": "sha256:5ea7afe1063652c94bf74a5b5b56445cc0d913b8c4f677a13556637a7f7a775c"
+      "files": 22,
+      "generated_at_commit": "b6330d052ac8dfa44c62c62492bdd11c1c6cc9fe",
+      "source_tree": "sha256:f0dddcef4f8e29107ca6ec4e929670cc278af61f6d37b74542c85b627177861b"
     },
     "map": {
       "parent": "aien-dev/synapse@099a980fedab8a6797bbf0358b8c5502c8045142",

@@ -198,7 +198,7 @@ if eq hnext cs io 0
 break
 end
 end
-r = hclose cs io
+r = hclose cs
 end
 fn sbsvok to void
 o = new uchar 128 0
@@ -219,6 +219,9 @@ r = sbout o p
 end
 fn sbserve to long
 fb = new uchar 4194304 0
+ret sbservebuf fb
+end
+fn sbservebuf fb edit uchar 4194304 to long
 cs = new ulong 320 0
 io = new uchar 131072 0
 a = new uchar 16 0

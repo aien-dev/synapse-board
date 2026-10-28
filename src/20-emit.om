@@ -149,7 +149,9 @@ ret false
 end
 for i ulong n
 c = get sb i
-ok = or or and ge c 97 le c 122 and ge c 65 le c 90 and ge c 48 le c 57
+ok = and ge c 97 le c 122
+ok = or ok and ge c 65 le c 90
+ok = or ok and ge c 48 le c 57
 if not ok
 ok = sbsafe c
 end
@@ -397,6 +399,12 @@ end
 sbraw 1 tbeht
 end
 note ======== repo map tree (iterative depth-first, file order among siblings)
+fn sbname w ulong m ulong to void
+o = get gmno m
+for j ulong get gmnl m
+sbesc1 w get gpool add o j
+end
+end
 fn sbnode m ulong d ulong cyc bool to void
 lb = new uchar 65536 0
 tp = new uint 16400 0
@@ -416,13 +424,8 @@ end
 sbnum 1 dd
 sbraw 1 tli2
 sbraw 1 tb1
-o = get gmno m
-for j ulong get gmnl m
-sbesc1 0 get gpool add o j
-end
-for j2 ulong get gmnl m
-sbesc1 1 get gpool add o j2
-end
+sbname 0 m
+sbname 1 m
 sbraw 0 tbold
 sbraw 1 tb2
 st = get gmst m
@@ -440,11 +443,13 @@ end
 if eq st 3
 sbr2 tnone
 end
-if and gt get gmpl m 0 eq get gmpar m jsnone
+if gt get gmpl m 0
+if eq get gmpar m jsnone
 sbr2 tpout
 sbfld 0 lb tp sb kpar
 sbfld 1 lb tp sb kpar
 sbr2 tclose
+end
 end
 if sbgetb lb tp karch
 sbr2 tarch
@@ -480,11 +485,13 @@ if eq get gmvis m 0
 sbnode m d and cyc eq it 0
 for i ulong nm
 c = sub sub nm 1 i
-if and eq get gmpar c m eq get gmvis c 0
+if eq get gmpar c m
+if eq get gmvis c 0
 if lt sp SBMAXM
 put gstk sp c
 put gsdp sp add d 1
 sp = add sp 1
+end
 end
 end
 end

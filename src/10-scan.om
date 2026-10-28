@@ -397,26 +397,8 @@ end
 ret true
 end
 note ======== map: records indexed, parents resolved within the map
-fn sbscanm to long
-lb = new uchar 65536 0
-tp = new uint 16400 0
-sb = new uchar 65536 0
-tot = get glen 1
-off = ulong 0
-ln = ulong 0
-for it ulong SBLINES
-if ge off tot
-ret sbresm
-end
-ln = add ln 1
-n = sbpl 1 off lb tp
-if eq n -1
-ret sberr 1 ln emlong
-end
-if eq n -2
-ret sberr 1 ln emjs
-end
-if gt n 0
+note Parse one row separately so stream state does not occupy the row parser's registers.
+fn sbmaprow lb view uchar 65536 tp view uint 16400 sb edit uchar 65536 off ulong ln ulong to long
 k = sbgets lb tp sb krepo
 if le k 0
 ret sberr 1 ln emrepo
@@ -469,6 +451,32 @@ end
 put gmst m st
 sbinc 8
 put gnm 0 add m 1
+ret 0
+end
+fn sbscanm to long
+lb = new uchar 65536 0
+tp = new uint 16400 0
+sb = new uchar 65536 0
+tot = get glen 1
+off = ulong 0
+ln = ulong 0
+for it ulong SBLINES
+if ge off tot
+ret sbresm
+end
+ln = add ln 1
+n = sbpl 1 off lb tp
+if eq n -1
+ret sberr 1 ln emlong
+end
+if eq n -2
+ret sberr 1 ln emjs
+end
+if gt n 0
+code = sbmaprow lb tp sb off ln
+if ne code 0
+ret code
+end
 end
 off = add add off ulong n 1
 end

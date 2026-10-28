@@ -1,7 +1,5 @@
 note synapse-board src/90-main.om -- arguments, render (atomic writes of BOARD.md and index.html), main.
 note exit codes (COORD-CONTRACT): 0 ok, 4 input missing, 64 usage, 65 malformed input, 70 internal, 75 temporary
-text tbmd "BOARD.md"
-text tidx "index.html"
 text crender "render"
 text cserve "serve"
 text fclaims "--claims"
@@ -12,8 +10,7 @@ text fnow "--now"
 text fhead "--head"
 text fdir "--dir"
 text fbind "--bind"
-text fmax "--max"
-text emusage "usage: synapse-board render --claims FILE --map FILE [--findings FILE] --out DIR [--now TS] [--head HEX] | serve --dir DIR --bind IP:PORT [--max N]"
+text flagmax "--max"
 text emnoc "claims file not found"
 text emnom "map file not found"
 text embig "input file larger than 4 MiB"
@@ -55,7 +52,7 @@ end
 if sbtmpeq n fbind
 ret 7
 end
-if sbtmpeq n fmax
+if sbtmpeq n flagmax
 ret 8
 end
 ret 99
@@ -71,7 +68,7 @@ end
 if ge add i 1 na
 ret 64
 end
-n = argread int i gtmp 0 4096
+n = argread ulong i gtmp 0 4096
 if lt n 0
 ret 64
 end
@@ -82,7 +79,7 @@ end
 if gt get gplen s 0
 ret 64
 end
-m = argread int add i 1 gpath mul s SBSLOT 4095
+m = argread ulong add i 1 gpath mul s SBSLOT 4095
 if le m 0
 ret 64
 end
@@ -102,7 +99,11 @@ ok = and ge c 48 le c 57
 if hex
 ok = or ok and ge c 97 le c 102
 else
-ok = or ok or or eq c 84 eq c 90 or or eq c 58 eq c 46 eq c 45
+ok = or ok eq c 84
+ok = or ok eq c 90
+ok = or ok eq c 58
+ok = or ok eq c 46
+ok = or ok eq c 45
 end
 if not ok
 ret false
@@ -375,9 +376,11 @@ end
 if eq cmd 1
 ret int sbrender
 end
-if or or gt sbslotl 0 0 gt sbslotl 1 0 or or gt sbslotl 2 0 gt sbslotl 3 0 or gt sbslotl 4 0 gt sbslotl 5 0
+for s ulong 6
+if gt sbslotl s 0
 sbsay emusage
 ret 64
+end
 end
 ret int sbserve
 end
